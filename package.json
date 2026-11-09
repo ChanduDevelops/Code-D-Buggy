@@ -1,7 +1,7 @@
 {
-  "name": "codevision",
+  "name": "Code-D-Buggy",
   "version": "1.0.0",
-  "description": "CodeVisualizer",
+  "description": "Code Visualizer Debugger",
   "main": "index.js",
   "scripts": {
     "build": "node -e \"fs.mkdirSync('dist', { recursive: true });\" && npx html-minifier-terser --collapse-whitespace --remove-comments --minify-css true --minify-js true src/index.html -o dist/index.html",
