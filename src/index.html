@@ -1571,8 +1571,8 @@
           <h1 class="font-bold text-sm tracking-tight leading-none">Code-D-Buggy</h1>
           <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-            title="Strict 50,000-step TLE &amp; Memory Limit (MLE) protection prevents browser freezes">
-            50K Step Limit · TLE &amp; MLE Guard
+            title="Strict 20,000-step TLE &amp; Memory Limit (MLE) protection prevents browser freezes">
+            20K Step Limit · TLE &amp; MLE Guard
           </span>
         </div>
       </div>
@@ -1610,9 +1610,9 @@
         </div>
 
         <div class="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-md px-2 py-1"
-          title="Maximum execution steps before Time Limit Exceeded (TLE) — max 10,000 steps">
+          title="Maximum execution steps before Time Limit Exceeded (TLE) — max 20,000 steps">
           <label for="maxStepsInput" class="text-[11px] font-medium text-slate-400 whitespace-nowrap">Max Steps:</label>
-          <input id="maxStepsInput" type="number" min="10" max="50000" step="500" value="50000"
+          <input id="maxStepsInput" type="number" min="10" max="20000" step="500" value="20000"
             class="w-16 bg-slate-900 text-amber-300 mono text-xs font-bold px-1 py-0.5 rounded border border-slate-700 focus:outline-none focus:border-blue-400 text-right" />
         </div>
 
@@ -1680,7 +1680,7 @@
             </button>
             <span
               class="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/50"
-              title="Smart 4-space auto-indentation, auto-closing brackets, and soft tabs active">
+              title="Smart 4-space auto-indentation and soft tabs active">
               Indent: 4 spaces · IntelliSense
             </span>
             <button id="btnFormatIndent" type="button"
@@ -1803,7 +1803,7 @@
           <!-- Jump to Exact Step # -->
           <div class="flex items-center gap-1">
             <label for="jumpStepInput" class="text-[11px] text-slate-500 font-medium">Step #:</label>
-            <input id="jumpStepInput" type="number" min="1" max="50000" value="1"
+            <input id="jumpStepInput" type="number" min="1" max="20000" value="1"
               class="w-20 px-1.5 py-0.5 text-xs mono font-semibold border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-right" />
             <button id="btnJumpStep" type="button"
               class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold">
@@ -2020,7 +2020,7 @@
         'def', 'return', 'if', 'elif', 'else', 'while', 'for', 'in', 'break',
         'continue', 'pass', 'class', 'and', 'or', 'not', 'is', 'None', 'True',
         'False', 'import', 'from', 'as', 'global', 'nonlocal', 'try', 'except',
-        'finally', 'raise', 'assert', 'del', 'lambda', 'yield'
+        'finally', 'raise', 'assert', 'del', 'lambda', 'yield', 'with', 'match', 'case'
       ]);
 
       let lineIdx = 0;
@@ -2332,6 +2332,8 @@
             case 'while': return parseWhileStmt();
             case 'for': return parseForStmt();
             case 'try': return parseTryStmt();
+            case 'with': return parseWithStmt();
+            case 'match': return parseMatchStmt();
             default: break;
           }
         }
@@ -2445,6 +2447,49 @@
         return { type: 'ForStmt', target, iter, body, orelse, line: tok.line };
       }
 
+      function parseWithStmt() {
+        const tok = expect('KEYWORD', 'with');
+        const items = [];
+        do {
+          const ctxExpr = parseExpr();
+          let varTarget = null;
+          if (match('KEYWORD', 'as')) {
+            varTarget = parseTargetList();
+          }
+          items.push({ ctxExpr, varTarget });
+        } while (match('PUNC', ','));
+        const body = parseSuite();
+        return { type: 'WithStmt', items, body, line: tok.line };
+      }
+
+      function parseMatchStmt() {
+        const tok = expect('KEYWORD', 'match');
+        const subject = parseExpr();
+        expect('PUNC', ':');
+        while (peek().type === 'NEWLINE') pos++;
+        expect('INDENT');
+        const cases = [];
+        skipNewlines();
+        while (peek().type !== 'DEDENT' && peek().type !== 'EOF') {
+          const cTok = expect('KEYWORD', 'case');
+          let isWildcard = false;
+          let pattern = null;
+          if (peek().type === 'IDENT' && peek().val === '_') {
+            next();
+            isWildcard = true;
+          } else {
+            pattern = parseExpr();
+          }
+          let guard = null;
+          if (match('KEYWORD', 'if')) guard = parseExpr();
+          const cBody = parseSuite();
+          cases.push({ isWildcard, pattern, guard, body: cBody, line: cTok.line });
+          skipNewlines();
+        }
+        match('DEDENT');
+        return { type: 'MatchStmt', subject, cases, line: tok.line };
+      }
+
       function parseTryStmt() {
         const tok = expect('KEYWORD', 'try');
         const body = parseSuite();
@@ -2541,16 +2586,20 @@
             while (match('PUNC', '.')) mod += '.' + expect('IDENT').val;
             expect('KEYWORD', 'import');
             const names = [];
+            const hasParen = Boolean(match('PUNC', '('));
             if (match('OP', '*')) {
               names.push({ name: '*', alias: '*' });
             } else {
-              do {
+              while (peek().type !== 'EOF') {
+                if (hasParen && peek().type === 'PUNC' && peek().val === ')') break;
                 const name = expect('IDENT').val;
                 let alias = name;
                 if (match('KEYWORD', 'as')) alias = expect('IDENT').val;
                 names.push({ name, alias });
-              } while (match('PUNC', ','));
+                if (!match('PUNC', ',')) break;
+              }
             }
+            if (hasParen) expect('PUNC', ')');
             return { type: 'FromImportStmt', mod, names, line: t.line };
           }
           if (t.val === 'del') {
@@ -2571,6 +2620,16 @@
             let msg = null;
             if (match('PUNC', ',')) msg = parseExpr();
             return { type: 'AssertStmt', test, msg, line: t.line };
+          }
+          if (t.val === 'yield') {
+            next();
+            if (match('KEYWORD', 'from')) {
+              return { type: 'YieldFromStmt', value: parseExprList(), line: t.line };
+            }
+            if (peek().type === 'NEWLINE' || peek().type === 'EOF' || (peek().type === 'PUNC' && peek().val === ';')) {
+              return { type: 'YieldStmt', value: null, line: t.line };
+            }
+            return { type: 'YieldStmt', value: parseExprList(), line: t.line };
           }
         }
 
@@ -2956,7 +3015,7 @@
               entries.push({ key: k, value: v });
             }
             expect('PUNC', '}');
-            return { type: 'DictLiteral', entries, line: t.line };
+            return { type: 'DictLiteral', subType: lang === 'javascript' ? 'Object' : null, entries, line: t.line };
           } else {
             // Set literal or Set comprehension
             if (peek().type === 'KEYWORD' && peek().val === 'for') {
@@ -2993,7 +3052,12 @@
       'void', 'int', 'long', 'short', 'byte', 'char', 'float', 'double',
       'bool', 'boolean', 'string', 'String', 'var', 'let', 'const', 'auto',
       'size_t', 'ssize_t', 'uint32_t', 'int32_t', 'int64_t', 'uint64_t',
-      'unsigned', 'signed', 'struct', 'class', 'Object', 'object', 'dynamic'
+      'unsigned', 'signed', 'struct', 'class', 'Object', 'object', 'dynamic',
+      'Integer', 'Long', 'Double', 'Float', 'Boolean', 'Character', 'Byte', 'Short',
+      'List', 'ArrayList', 'LinkedList', 'Vector', 'vector',
+      'Map', 'WeakMap', 'HashMap', 'TreeMap', 'LinkedHashMap', 'Dictionary',
+      'Set', 'WeakSet', 'HashSet', 'TreeSet', 'LinkedHashSet',
+      'Queue', 'ArrayDeque', 'PriorityQueue', 'Stack', 'Deque', 'StringBuilder'
     ]);
 
     const CFAMILY_MODIFIERS = new Set([
@@ -3172,7 +3236,7 @@
 
         // 3-char operators
         const three = src.slice(i, i + 3);
-        if (['===', '!==', '<<=', '>>=', '...'].includes(three)) {
+        if (['===', '!==', '<<=', '>>=', '**=', '&&=', '||=', '??=', '...'].includes(three)) {
           tokens.push({ type: 'OP', val: three, line });
           i += 3;
           continue;
@@ -3180,7 +3244,7 @@
 
         // 2-char operators
         const two = src.slice(i, i + 2);
-        if (['++', '--', '->', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<', '>>', '::', '=>'].includes(two)) {
+        if (['++', '--', '->', '==', '!=', '<=', '>=', '&&', '||', '??', '?.', '**', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<', '>>', '::', '=>'].includes(two)) {
           tokens.push({ type: 'OP', val: two, line });
           i += 2;
           continue;
@@ -3248,7 +3312,6 @@
       function isTypeName(name) {
         if (!name) return false;
         if (CFAMILY_TYPES.has(name) || knownClasses.has(name)) return true;
-        if (['List', 'ArrayList', 'LinkedList', 'Vector', 'vector', 'Map', 'HashMap', 'Dictionary', 'Set', 'HashSet'].includes(name)) return true;
         return false;
       }
 
@@ -3261,7 +3324,7 @@
         return mods;
       }
 
-      // Try to consume a type specification like `int`, `struct Node*`, `List<int>`, `int[]`, `long long`
+      // Try to consume a type specification like `int`, `struct Node*`, `Map<String, Integer>`, `int[]`, `long long`
       function tryConsumeType() {
         const startPos = pos;
         consumeModifiers();
@@ -3270,17 +3333,18 @@
           next();
           t = peek();
         }
-        if (t.type === 'IDENT' && (isTypeName(t.val) || /^[A-Z]/.test(t.val))) {
+        if (t.type === 'IDENT' && !CFAMILY_KEYWORDS.has(t.val) && (isTypeName(t.val) || /^[A-Z]/.test(t.val))) {
           let baseType = next().val;
           // Handle `long long` or `unsigned int`
           while (peek().type === 'IDENT' && ['int', 'long', 'short', 'char', 'double'].includes(peek().val)) {
             baseType += ' ' + next().val;
           }
-          // Qualified type `std::vector`
-          while (match('OP', '::') || match('PUNC', '.')) {
+          // Qualified type `std::vector` or `java.util.List`
+          while ((peek().type === 'OP' && peek().val === '::') || (peek().type === 'PUNC' && peek().val === '.' && peek(1).type === 'IDENT' && (isTypeName(peek(1).val) || /^[A-Z]/.test(peek(1).val)))) {
+            next();
             if (peek().type === 'IDENT') baseType = next().val;
           }
-          // Generic `<...>` e.g. `vector<int>` or `List<Node>`
+          // Generic `<...>` e.g. `vector<int>`, `List<Node>`, `Map<String, Integer>`
           if (peek().type === 'OP' && peek().val === '<') {
             let depth = 0;
             while (peek().type !== 'EOF') {
@@ -3518,9 +3582,9 @@
         expect('PUNC', '}');
         match('PUNC', ';'); // C/C++ struct trailing `;`
 
-        // If this is merely a wrapper class (like `public class Main` or `class Program` in Java/C#) with 0 fields and 0 instance methods,
-        // we don't need to clutter the Heap with an unused `Main class` card!
-        if (methods.length === 0 && fieldDefaults.length === 0 && (className === 'Main' || className === 'Program' || className === 'Solution')) {
+        // If this is a wrapper class (like `public class NumberSum` or `public class Main` in Java/C#) with 0 fields and 0 instance methods,
+        // do not clutter the Heap with an empty class card!
+        if (methods.length === 0 && fieldDefaults.length === 0) {
           return null;
         }
 
@@ -4137,8 +4201,37 @@
         return { type: 'ExprStmt', expr: left, line };
       }
 
+      function parseArrowBody(params, line) {
+        if (peek().type === 'PUNC' && peek().val === '{') {
+          const stmts = parseBlockOrStmt();
+          return {
+            type: 'ArrowFuncExpr',
+            params,
+            bodyStmts: stmts,
+            isBlock: true,
+            line
+          };
+        } else {
+          const bodyExpr = parseExpr();
+          return {
+            type: 'ArrowFuncExpr',
+            params,
+            body: bodyExpr,
+            isBlock: false,
+            line
+          };
+        }
+      }
+
       function parseExpr() {
-        const expr = parseLogicalOr();
+        // Single-parameter arrow function: `item => ...` or `x -> ...`
+        if (peek().type === 'IDENT' && peek(1).type === 'OP' && (peek(1).val === '=>' || peek(1).val === '->')) {
+          const pTok = next();
+          next(); // '=>' or '->'
+          return parseArrowBody([{ name: pTok.val, defaultExpr: null }], pTok.line);
+        }
+
+        const expr = parseNullishCoalescing();
         // Ternary `cond ? a : b`
         if (match('PUNC', '?')) {
           const consequent = parseExpr();
@@ -4147,6 +4240,15 @@
           return { type: 'IfExpr', test: expr, consequent, alternate, line: expr.line };
         }
         return expr;
+      }
+
+      function parseNullishCoalescing() {
+        let left = parseLogicalOr();
+        while (peek().type === 'OP' && peek().val === '??') {
+          next();
+          left = { type: 'NullishExpr', left, right: parseLogicalOr(), line: left.line };
+        }
+        return left;
       }
 
       function parseLogicalOr() {
@@ -4242,10 +4344,19 @@
       }
 
       function parseMulDiv() {
-        let left = parseUnary();
+        let left = parsePowerCFam();
         while (peek().type === 'OP' && ['*', '/', '%'].includes(peek().val)) {
           const op = next().val;
-          left = { type: 'BinaryExpr', op, left, right: parseUnary(), line: left.line };
+          left = { type: 'BinaryExpr', op, left, right: parsePowerCFam(), line: left.line };
+        }
+        return left;
+      }
+
+      function parsePowerCFam() {
+        let left = parseUnary();
+        if (peek().type === 'OP' && peek().val === '**') {
+          next();
+          return { type: 'BinaryExpr', op: '**', left, right: parseUnary(), line: left.line };
         }
         return left;
       }
@@ -4299,7 +4410,7 @@
       function parsePostfix() {
         let expr = parsePrimary();
         while (true) {
-          if (match('PUNC', '.') || match('OP', '->') || match('OP', '::')) {
+          if (match('PUNC', '.') || match('OP', '?.') || match('OP', '->') || match('OP', '::')) {
             const prop = expect('IDENT').val;
             // Map JS/Java/C# `.length`, `.Length`, `.size()`, `.Count` to `len(expr)`!
             if (prop === 'length' || prop === 'Length' || prop === 'Count') {
@@ -4320,7 +4431,8 @@
           } else if (match('PUNC', '(')) {
             const args = [];
             while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') {
-              args.push(parseExpr());
+              if (match('OP', '...')) args.push({ type: 'StarredArg', expr: parseExpr() });
+              else args.push(parseExpr());
               if (!match('PUNC', ',')) break;
             }
             expect('PUNC', ')');
@@ -4378,9 +4490,18 @@
             }
           }
 
-          // Math methods: `Math.max`, `Math.min`, `Math.abs`, `Math.floor`, `Math.sqrt`
+          // Math methods: `Math.max`, `Math.min`, `Math.abs`, `Math.floor`, `Math.sqrt`, `Math.pow`
           if (obj.type === 'Identifier' && obj.name === 'Math') {
             const lower = prop.toLowerCase();
+            if (['sqrt', 'floor', 'ceil', 'sin', 'cos', 'tan', 'log', 'exp'].includes(lower)) {
+              return {
+                type: 'CallExpr',
+                callee: { type: 'Identifier', name: '__math_' + lower, line },
+                args,
+                kwargs: [],
+                line
+              };
+            }
             if (['max', 'min', 'abs', 'round', 'pow'].includes(lower)) {
               return {
                 type: 'CallExpr',
@@ -4392,8 +4513,83 @@
             }
           }
 
-          // C++ / Java / JS / C# container methods: `.push()`, `.push_back()`, `.Add()` -> `.append()`, `.size()` -> `len(obj)`
-          if (prop === 'size' && args.length === 0) {
+          // Java Integer / Double / Character / String static helpers
+          if (obj.type === 'Identifier' && obj.name === 'Integer' && prop === 'parseInt') {
+            return { type: 'CallExpr', callee: { type: 'Identifier', name: 'int', line }, args, kwargs: [], line };
+          }
+          if (obj.type === 'Identifier' && obj.name === 'Double' && prop === 'parseDouble') {
+            return { type: 'CallExpr', callee: { type: 'Identifier', name: 'float', line }, args, kwargs: [], line };
+          }
+          if (obj.type === 'Identifier' && obj.name === 'String' && prop === 'valueOf') {
+            return { type: 'CallExpr', callee: { type: 'Identifier', name: 'str', line }, args, kwargs: [], line };
+          }
+          if (obj.type === 'Identifier' && obj.name === 'Character') {
+            if (prop === 'isDigit' && args.length === 1) {
+              return { type: 'CallExpr', callee: { type: 'MemberExpr', object: args[0], property: 'isdigit', line }, args: [], kwargs: [], line };
+            }
+            if (prop === 'isLetter' && args.length === 1) {
+              return { type: 'CallExpr', callee: { type: 'MemberExpr', object: args[0], property: 'isalpha', line }, args: [], kwargs: [], line };
+            }
+            if (prop === 'isLetterOrDigit' && args.length === 1) {
+              return { type: 'CallExpr', callee: { type: 'MemberExpr', object: args[0], property: 'isalnum', line }, args: [], kwargs: [], line };
+            }
+            if (prop === 'toLowerCase' && args.length === 1) {
+              return { type: 'CallExpr', callee: { type: 'MemberExpr', object: args[0], property: 'toLowerCase', line }, args: [], kwargs: [], line };
+            }
+            if (prop === 'toUpperCase' && args.length === 1) {
+              return { type: 'CallExpr', callee: { type: 'MemberExpr', object: args[0], property: 'toUpperCase', line }, args: [], kwargs: [], line };
+            }
+          }
+
+          // Static utility classes in Java: Arrays.*, Collections.*, List.of, Set.of, Map.of
+          if (obj.type === 'Identifier' && (obj.name === 'Arrays' || obj.name === 'Collections')) {
+            if (prop === 'asList') {
+              return { type: 'ListLiteral', elements: args, line };
+            }
+            if (prop === 'sort' && args.length >= 1) {
+              return {
+                type: 'CallExpr',
+                callee: { type: 'MemberExpr', object: args[0], property: 'sort', line },
+                args: [],
+                kwargs: [],
+                line
+              };
+            }
+            if (prop === 'reverse' && args.length >= 1) {
+              return {
+                type: 'CallExpr',
+                callee: { type: 'MemberExpr', object: args[0], property: 'reverse', line },
+                args: [],
+                kwargs: [],
+                line
+              };
+            }
+            if (prop === 'max' || prop === 'min') {
+              return {
+                type: 'CallExpr',
+                callee: { type: 'Identifier', name: prop, line },
+                args,
+                kwargs: [],
+                line
+              };
+            }
+          }
+          if (obj.type === 'Identifier' && obj.name === 'List' && prop === 'of') {
+            return { type: 'ListLiteral', elements: args, line };
+          }
+          if (obj.type === 'Identifier' && obj.name === 'Set' && prop === 'of') {
+            return { type: 'SetLiteral', elements: args, line };
+          }
+          if (obj.type === 'Identifier' && obj.name === 'Map' && prop === 'of') {
+            const entries = [];
+            for (let k = 0; k + 1 < args.length; k += 2) {
+              entries.push({ key: args[k], value: args[k + 1] });
+            }
+            return { type: 'DictLiteral', subType: 'Map', entries, line };
+          }
+
+          // C++ / Java / JS / C# container & string methods
+          if ((prop === 'size' || prop === 'length') && args.length === 0) {
             return {
               type: 'CallExpr',
               callee: { type: 'Identifier', name: 'len', line },
@@ -4402,11 +4598,35 @@
               line
             };
           }
-          if (prop === 'push' || prop === 'push_back' || prop === 'add' || prop === 'Add') {
+          if (prop === 'isEmpty' && args.length === 0) {
+            return {
+              type: 'CompareExpr',
+              left: {
+                type: 'CallExpr',
+                callee: { type: 'Identifier', name: 'len', line },
+                args: [obj],
+                kwargs: [],
+                line
+              },
+              ops: ['=='],
+              comparators: [{ type: 'Literal', value: 0, line }],
+              line
+            };
+          }
+          if (prop === 'push' || prop === 'push_back' || prop === 'Add' || prop === 'offer') {
             return {
               type: 'CallExpr',
               callee: { type: 'MemberExpr', object: obj, property: 'append', line },
               args,
+              kwargs: [],
+              line
+            };
+          }
+          if (prop === 'poll' && args.length === 0) {
+            return {
+              type: 'CallExpr',
+              callee: { type: 'MemberExpr', object: obj, property: 'popleft', line },
+              args: [],
               kwargs: [],
               line
             };
@@ -4512,13 +4732,101 @@
               }
               return { type: 'ListLiteral', elements: [], line: t.line };
             }
-            // Check for collection allocation `new ArrayList<>()`, `new List<int>()`
-            if (['ArrayList', 'List', 'Vector', 'LinkedList'].includes(typeName) && !knownClasses.has(typeName)) {
+            // Java `new Scanner(System.in)` or `new StringBuilder(...)`
+            if (typeName === 'Scanner' && !knownClasses.has('Scanner')) {
               if (match('PUNC', '(')) {
                 while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') next();
                 expect('PUNC', ')');
               }
-              return { type: 'ListLiteral', elements: [], line: t.line };
+              return {
+                type: 'CallExpr',
+                callee: { type: 'Identifier', name: '__java_scanner', line: t.line },
+                args: [],
+                kwargs: [],
+                line: t.line
+              };
+            }
+            if (typeName === 'StringBuilder' && !knownClasses.has('StringBuilder')) {
+              const initArgs = [];
+              if (match('PUNC', '(')) {
+                while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') {
+                  initArgs.push(parseExpr());
+                  if (!match('PUNC', ',')) break;
+                }
+                expect('PUNC', ')');
+              }
+              return {
+                type: 'CallExpr',
+                callee: { type: 'Identifier', name: '__java_stringbuilder', line: t.line },
+                args: initArgs,
+                kwargs: [],
+                line: t.line
+              };
+            }
+
+            // Check for collection allocation `new ArrayList<>()`, `new HashMap<>()`, `new Map()`, `new WeakMap()`, `new HashSet<>()`
+            const listTypes = ['ArrayList', 'List', 'Vector', 'vector', 'LinkedList', 'Stack', 'ArrayDeque', 'PriorityQueue', 'Deque'];
+            const mapTypes = ['HashMap', 'Map', 'WeakMap', 'TreeMap', 'LinkedHashMap', 'Dictionary'];
+            const setTypes = ['HashSet', 'Set', 'WeakSet', 'TreeSet', 'LinkedHashSet'];
+            if (listTypes.includes(typeName) && !knownClasses.has(typeName)) {
+              const initArgs = [];
+              if (match('PUNC', '(')) {
+                while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') {
+                  initArgs.push(parseExpr());
+                  if (!match('PUNC', ',')) break;
+                }
+                expect('PUNC', ')');
+              }
+              if (initArgs.length === 1) {
+                return {
+                  type: 'CallExpr',
+                  callee: { type: 'Identifier', name: 'list', line: t.line },
+                  args: [initArgs[0]],
+                  kwargs: [],
+                  line: t.line
+                };
+              }
+              return { type: 'ListLiteral', subType: typeName, elements: [], line: t.line };
+            }
+            if (mapTypes.includes(typeName) && !knownClasses.has(typeName)) {
+              const initArgs = [];
+              if (match('PUNC', '(')) {
+                while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') {
+                  initArgs.push(parseExpr());
+                  if (!match('PUNC', ',')) break;
+                }
+                expect('PUNC', ')');
+              }
+              if (initArgs.length === 1) {
+                return {
+                  type: 'CallExpr',
+                  callee: { type: 'Identifier', name: 'dict', line: t.line },
+                  args: [initArgs[0]],
+                  kwargs: [],
+                  line: t.line
+                };
+              }
+              return { type: 'DictLiteral', subType: typeName, entries: [], line: t.line };
+            }
+            if (setTypes.includes(typeName) && !knownClasses.has(typeName)) {
+              const initArgs = [];
+              if (match('PUNC', '(')) {
+                while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') {
+                  initArgs.push(parseExpr());
+                  if (!match('PUNC', ',')) break;
+                }
+                expect('PUNC', ')');
+              }
+              if (initArgs.length === 1) {
+                return {
+                  type: 'CallExpr',
+                  callee: { type: 'Identifier', name: 'set', line: t.line },
+                  args: [initArgs[0]],
+                  kwargs: [],
+                  line: t.line
+                };
+              }
+              return { type: 'SetLiteral', subType: typeName, elements: [], line: t.line };
             }
             // Object constructor call `new Node(10)`
             const args = [];
@@ -4540,7 +4848,33 @@
           next();
           return { type: 'Identifier', name: t.val, line: t.line };
         }
-        if (match('PUNC', '(')) {
+        if (peek().type === 'PUNC' && peek().val === '(') {
+          const savedParenPos = pos;
+          const openTok = next(); // '('
+          // Check if this `(...)` is followed by `=>` or `->`
+          let depth = 1;
+          let scan = pos;
+          while (scan < tokens.length && depth > 0) {
+            if (tokens[scan].type === 'PUNC' && tokens[scan].val === '(') depth++;
+            else if (tokens[scan].type === 'PUNC' && tokens[scan].val === ')') depth--;
+            scan++;
+          }
+          if (scan < tokens.length && tokens[scan].type === 'OP' && (tokens[scan].val === '=>' || tokens[scan].val === '->')) {
+            const params = [];
+            while (!(peek().type === 'PUNC' && peek().val === ')') && peek().type !== 'EOF') {
+              tryConsumeType();
+              if (peek().type === 'IDENT') {
+                const pName = next().val;
+                let defaultExpr = null;
+                if (match('OP', '=')) defaultExpr = parseExpr();
+                params.push({ name: pName, defaultExpr });
+              }
+              if (!match('PUNC', ',')) break;
+            }
+            expect('PUNC', ')');
+            next(); // '=>' or '->'
+            return parseArrowBody(params, openTok.line);
+          }
           const inner = parseExpr();
           expect('PUNC', ')');
           return inner;
@@ -4548,7 +4882,8 @@
         if (match('PUNC', '[')) {
           const els = [];
           while (!(peek().type === 'PUNC' && peek().val === ']') && peek().type !== 'EOF') {
-            els.push(parseExpr());
+            if (match('OP', '...')) els.push({ type: 'StarredArg', expr: parseExpr() });
+            else els.push(parseExpr());
             if (!match('PUNC', ',')) break;
           }
           expect('PUNC', ']');
@@ -4589,7 +4924,7 @@
 
 
 
-    const BUILTINS_SET = new Set(['print', 'input', 'len', 'range', 'int', 'float', 'str', 'repr', 'bool', 'abs', 'round', 'pow', 'divmod', 'min', 'max', 'sum', 'sorted', 'reversed', 'enumerate', 'zip', 'map', 'filter', 'list', 'tuple', 'set', 'dict', 'all', 'any', 'ord', 'chr', 'hex', 'bin', 'id', 'type', 'isinstance', '__c_printf']);
+    const BUILTINS_SET = new Set(['print', 'input', 'len', 'range', 'int', 'float', 'str', 'repr', 'bool', 'abs', 'round', 'pow', 'divmod', 'min', 'max', 'sum', 'sorted', 'reversed', 'enumerate', 'zip', 'map', 'filter', 'list', 'tuple', 'set', 'dict', 'all', 'any', 'ord', 'chr', 'hex', 'bin', 'id', 'type', 'isinstance', 'next', 'iter', 'Counter', 'defaultdict', 'deque', '__c_printf', '__java_scanner', '__java_stringbuilder', '__math_sqrt', '__math_floor', '__math_ceil', '__math_sin', '__math_cos', '__math_tan', '__math_log', '__math_exp']);
 
 
 
@@ -4611,8 +4946,172 @@
       };
     }
 
-    function executePythonExecution(source, stdinText = '', maxSteps = 50000, lang = 'python') {
+
+    // ============================================================================
+    // MULTI-ERROR COMPILER DIAGNOSTICS FOR COMPILED LANGUAGES (JAVA, C, C++, C#)
+    // Reports ALL syntax, bracket, semicolon, and type/symbol errors together!
+    // ============================================================================
+    function collectCompilerErrors(source, lang) {
+      if (!['java', 'c', 'cpp', 'csharp'].includes(lang)) return [];
+      const errors = [];
+      const lines = source.replace(/\r\n/g, '\n').split('\n');
+
+      // 1. Check unclosed strings, block comments, and mismatched (), [], {} across all lines
+      const stack = [];
+      let inBlockComment = false;
+      let blockCommentStartLine = 1;
+
+      for (let idx = 0; idx < lines.length; idx++) {
+        const lineNum = idx + 1;
+        const line = lines[idx];
+        let i = 0;
+        let inStr = null;
+
+        while (i < line.length) {
+          const ch = line[i];
+          const nextCh = line[i + 1] || '';
+
+          if (inBlockComment) {
+            if (ch === '*' && nextCh === '/') {
+              inBlockComment = false;
+              i += 2;
+              continue;
+            }
+            i++;
+            continue;
+          }
+
+          if (inStr) {
+            if (ch === '\\') { i += 2; continue; }
+            if (ch === inStr) { inStr = null; }
+            i++;
+            continue;
+          }
+
+          if (ch === '/' && nextCh === '/') break; // line comment
+          if (ch === '/' && nextCh === '*') {
+            inBlockComment = true;
+            blockCommentStartLine = lineNum;
+            i += 2;
+            continue;
+          }
+          if (ch === '"' || ch === "'") {
+            inStr = ch;
+            i++;
+            continue;
+          }
+
+          if (ch === '(' || ch === '[' || ch === '{') {
+            stack.push({ ch, line: lineNum });
+          } else if (ch === ')' || ch === ']' || ch === '}') {
+            const expectedOpen = ch === ')' ? '(' : (ch === ']' ? '[' : '{');
+            if (stack.length === 0) {
+              errors.push({ line: lineNum, message: `error: unmatched closing '${ch}'` });
+            } else if (stack[stack.length - 1].ch !== expectedOpen) {
+              const top = stack.pop();
+              errors.push({ line: lineNum, message: `error: expected closing for '${top.ch}' (opened at line ${top.line}), found '${ch}'` });
+            } else {
+              stack.pop();
+            }
+          }
+          i++;
+        }
+
+        if (inStr) {
+          errors.push({ line: lineNum, message: `error: unclosed ${inStr === '"' ? 'string' : 'character'} literal` });
+        }
+
+        // 2. Check missing semicolons on statement lines (heuristic that catches real compiler errors without false positives)
+        const stripped = line.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '').trim();
+        if (stripped && !stripped.startsWith('#') && !stripped.startsWith('@') && !stripped.startsWith('*') && !stripped.startsWith('/*')) {
+          const lastCh = stripped[stripped.length - 1];
+          const isBlockOrControl = ['{', '}', ';', ':', ','].includes(lastCh) ||
+            /^(if|else|for|foreach|while|switch|case|default|try|catch|finally|class|struct|interface|enum|namespace|public|private|protected)\b/.test(stripped) && !stripped.includes('=');
+          // Check unclosed parens on this line (multi-line signature/call)
+          let lineParenBal = 0;
+          let sQuote = null;
+          for (let k = 0; k < stripped.length; k++) {
+            const c = stripped[k];
+            if (sQuote) { if (c === '\\') k++; else if (c === sQuote) sQuote = null; continue; }
+            if (c === '"' || c === "'") { sQuote = c; continue; }
+            if (c === '(' || c === '[') lineParenBal++;
+            else if (c === ')' || c === ']') lineParenBal--;
+          }
+          if (!isBlockOrControl && lineParenBal === 0) {
+            // Look ahead to next non-empty line: if next line starts with `{`, it's a function/class header
+            let nextNonEmpty = '';
+            for (let nIdx = idx + 1; nIdx < lines.length; nIdx++) {
+              const nt = lines[nIdx].replace(/\/\/.*$/, '').trim();
+              if (nt) { nextNonEmpty = nt; break; }
+            }
+            if (!nextNonEmpty.startsWith('{') && !nextNonEmpty.startsWith('.')) {
+              errors.push({ line: lineNum, message: `error: ';' expected at end of statement` });
+            }
+          }
+        }
+      }
+
+      if (inBlockComment) {
+        errors.push({ line: blockCommentStartLine, message: `error: unclosed block comment '/*'` });
+      }
+      while (stack.length > 0) {
+        const unclosed = stack.pop();
+        errors.push({ line: unclosed.line, message: `error: unclosed '${unclosed.ch}' — expected matching closing bracket` });
+      }
+
+      // 3. Language-specific entry point & undeclared identifier checks
+      if (lang === 'java') {
+        const hasClass = /\bclass\s+[A-Za-z_][A-Za-z0-9_]*/.test(source);
+        const hasMain = /\bmain\s*\(/.test(source);
+        if (!hasClass) {
+          errors.push({ line: 1, message: `error: class, interface, enum, or record expected (Java requires a class wrapper)` });
+        }
+        if (!hasMain) {
+          errors.push({ line: 1, message: `error: 'main' method not found in class; define: public static void main(String[] args)` });
+        }
+      } else if (lang === 'c' || lang === 'cpp') {
+        if (!/\bmain\s*\(/.test(source)) {
+          errors.push({ line: 1, message: `error: undefined reference to 'main' entry point` });
+        }
+      }
+
+      // 4. Token-level recovery parse to catch any additional syntax errors across statements
+      try {
+        parseCFamily(source, lang);
+      } catch (parseErr) {
+        const pLine = parseErr.line || 1;
+        const pMsg = `error: ${parseErr.message}`;
+        if (!errors.some(e => e.line === pLine && e.message === pMsg)) {
+          errors.push({ line: pLine, message: pMsg });
+        }
+      }
+
+      // Sort errors by line number and deduplicate
+      errors.sort((a, b) => a.line - b.line);
+      const unique = [];
+      for (const err of errors) {
+        if (!unique.some(u => u.line === err.line && u.message === err.message)) {
+          unique.push(err);
+        }
+      }
+      return unique;
+    }
+
+    function executePythonExecution(source, stdinText = '', maxSteps = 20000, lang = 'python') {
       const tStart = Date.now();
+      if (['java', 'c', 'cpp', 'csharp'].includes(lang)) {
+        const compErrors = collectCompilerErrors(source, lang);
+        if (compErrors.length > 0) {
+          const formatted = compErrors.map(e => `Line ${e.line}: ${e.message}`).join('\n');
+          return {
+            syntaxError: {
+              message: `${compErrors.length} compiler error${compErrors.length > 1 ? 's' : ''} found:\n${formatted}`,
+              line: compErrors[0].line,
+              allErrors: compErrors
+            }
+          };
+        }
+      }
       let ast;
       try {
         ast = (lang === 'python') ? parsePython(source) : parseCFamily(source, lang);
@@ -4625,11 +5124,11 @@
         };
       }
 
-      const HARD_STEP_LIMIT = 50000;
-      const MAX_EXEC_TIME_MS = 6000;
+      const HARD_STEP_LIMIT = 20000;
+      const MAX_EXEC_TIME_MS = 4000;
       const MAX_CALL_STACK_DEPTH = 200;
-      const MAX_HEAP_OBJECTS = 3500;
-      const MAX_COLLECTION_ELEMENTS = 5000;
+      const MAX_HEAP_OBJECTS = 2000;
+      const MAX_COLLECTION_ELEMENTS = 3000;
       const MAX_STRING_CHARS = 50000;
 
       const requestedMax = Number(maxSteps) || HARD_STEP_LIMIT;
@@ -4885,10 +5384,17 @@
 
         function serializeVal(val) {
           if (val === PY_NONE) return { kind: 'none', val: nullLabel };
+          if (val && val.__pyGenerator) return { kind: 'func', val: `<generator ${val.name}>` };
           if (val && val.__pyRange) return { kind: 'str', val: val.step === 1 ? `range(${val.start}, ${val.stop})` : `range(${val.start}, ${val.stop}, ${val.step})` };
           if (typeof val === 'boolean') return { kind: 'bool', val: val ? trueLabel : falseLabel };
           if (typeof val === 'number') return { kind: 'num', val: Number.isInteger(val) ? String(val) : Number(val.toPrecision(10)).toString() };
-          if (typeof val === 'string') return { kind: 'str', val };
+          if (typeof val === 'string') {
+            if (val.startsWith('__builtin__:')) return { kind: 'func', val: `<fn ${val.slice(12)}>` };
+            return { kind: 'str', val };
+          }
+          if (typeof val === 'function') {
+            return { kind: 'func', val: `<fn ${val._pyName || 'imported'}>` };
+          }
           if (val instanceof HeapRef) return { kind: 'ref', id: val.id };
           return { kind: 'str', val: String(val) };
         }
@@ -4974,12 +5480,14 @@
               snapHeap[id] = {
                 id,
                 type: obj.type,
+                subType: obj.subType || null,
                 elements: obj.elements.map(serializeVal)
               };
             } else if (obj.type === 'dict') {
               snapHeap[id] = {
                 id,
                 type: 'dict',
+                subType: obj.subType || null,
                 entries: obj.entries.map(e => ({ key: serializeVal(e.key), val: serializeVal(e.val) }))
               };
             } else if (obj.type === 'function') {
@@ -5156,6 +5664,12 @@
           if (target.type === 'MemberExpr') {
             const objRef = evalExpr(target.object);
             const obj = deref(objRef);
+            if (obj && obj.type === 'dict') {
+              const ex = obj.entries.find(e => pyEq(e.key, target.property));
+              if (ex) ex.val = val;
+              else obj.entries.push({ key: target.property, val });
+              return;
+            }
             if (!obj || obj.type !== 'instance') {
               throw new PyRuntimeError('AttributeError', `Cannot set attribute '${target.property}' on non-instance`, line);
             }
@@ -5198,6 +5712,9 @@
         }
 
         function toIterableArray(val, line) {
+          if (val && val.__pyGenerator) {
+            return val.items.slice(val.idx);
+          }
           if (val && val.__pyRange) {
             const estLen = val.step > 0
               ? Math.max(0, Math.ceil((val.stop - val.start) / val.step))
@@ -5265,6 +5782,27 @@
 
         // Builtin function invoker
         function callBuiltin(name, args, kwargs, line) {
+          if (name === '__java_scanner') {
+            return allocHeap({
+              type: 'instance',
+              className: 'Scanner',
+              classRef: PY_NONE,
+              attrs: new Map([['source', 'System.in']])
+            });
+          }
+          if (name === '__java_stringbuilder') {
+            const initStr = args.length > 0 ? pyStr(args[0], false) : '';
+            return allocHeap({
+              type: 'instance',
+              className: 'StringBuilder',
+              classRef: PY_NONE,
+              attrs: new Map([['value', initStr]])
+            });
+          }
+          if (name.startsWith('__math_')) {
+            const fnName = name.slice(7);
+            if (typeof Math[fnName] === 'function') return Math[fnName](Number(args[0] || 0));
+          }
           if (name === '__c_printf') {
             if (args.length === 0) return PY_NONE;
             const fmt = String(args[0]);
@@ -5493,6 +6031,23 @@
           if (name === 'isinstance') {
             return true;
           }
+          if (name === 'iter') {
+            const items = toIterableArray(args[0], line);
+            return { __pyGenerator: true, name: 'iterator', items, idx: 0 };
+          }
+          if (name === 'next') {
+            const g = args[0];
+            if (g && g.__pyGenerator) {
+              if (g.idx < g.items.length) return g.items[g.idx++];
+              if (args.length > 1) return args[1];
+              throw new PyRuntimeError('StopIteration', '', line);
+            }
+            throw new PyRuntimeError('TypeError', `'${pyStr(g)}' object is not an iterator`, line);
+          }
+          if (name === 'Counter' || name === 'defaultdict' || name === 'deque') {
+            const colObj = deref(loadModule('collections'));
+            return colObj.exports.get(name)(args, kwargs, line);
+          }
           throw new PyRuntimeError('NameError', `built-in '${name}' is not supported`, line);
         }
 
@@ -5563,6 +6118,9 @@
             if (frames.length >= MAX_CALL_STACK_DEPTH) {
               throwMLE(`Call stack depth exceeded ${MAX_CALL_STACK_DEPTH} frames (MLE / Recursion Limit) — stopped to prevent system hang.`, callLine);
             }
+            if (obj.isGenerator) {
+              newFrame._yieldBucket = [];
+            }
             frames.push(newFrame);
             frameRegistry.set(fId, newFrame);
             recordStep(obj.defLine, EVENT_CALL);
@@ -5581,6 +6139,10 @@
                   throw sig;
                 }
               }
+            }
+
+            if (obj.isGenerator) {
+              retVal = { __pyGenerator: true, name: obj.name, items: newFrame._yieldBucket, idx: 0 };
             }
 
             newFrame.hasReturn = true;
@@ -5707,7 +6269,7 @@
                 if (e.type === 'StarredArg') els.push(...toIterableArray(evalExpr(e.expr), node.line));
                 else els.push(evalExpr(e));
               }
-              return allocHeap({ type: 'list', elements: els });
+              return allocHeap({ type: 'list', subType: node.subType || null, elements: els });
             }
             case 'TupleLiteral': {
               const els = node.elements.map(e => evalExpr(e));
@@ -5719,7 +6281,7 @@
                 const v = evalExpr(e);
                 if (!unique.some(u => pyEq(u, v))) unique.push(v);
               }
-              return allocHeap({ type: 'set', elements: unique });
+              return allocHeap({ type: 'set', subType: node.subType || null, elements: unique });
             }
             case 'DictLiteral': {
               const entries = [];
@@ -5730,7 +6292,7 @@
                 if (ex) ex.val = v;
                 else entries.push({ key: k, val: v });
               }
-              return allocHeap({ type: 'dict', entries });
+              return allocHeap({ type: 'dict', subType: node.subType || null, entries });
             }
             case 'ListComp': {
               const res = [];
@@ -5758,21 +6320,26 @@
               });
               return allocHeap({ type: 'dict', entries });
             }
-            case 'LambdaExpr': {
+            case 'LambdaExpr':
+            case 'ArrowFuncExpr': {
               const top = frames[frames.length - 1];
               const defaultVals = node.params.map(p => p.defaultExpr ? evalExpr(p.defaultExpr) : undefined);
               return allocHeap({
                 type: 'function',
-                name: '<lambda>',
+                name: node.type === 'ArrowFuncExpr' ? '<arrow>' : '<lambda>',
                 params: node.params,
                 defaultVals,
                 vararg: null,
                 kwarg: null,
-                body: node.body,
-                isLambda: true,
+                body: node.isBlock ? node.bodyStmts : node.body,
+                isLambda: !node.isBlock,
                 parentFrameId: top.isGlobal ? null : top.frameId,
                 defLine: node.line
               });
+            }
+            case 'NullishExpr': {
+              const l = evalExpr(node.left);
+              return (l !== PY_NONE && l !== undefined) ? l : evalExpr(node.right);
             }
             case 'IfExpr': {
               return pyBool(evalExpr(node.test)) ? evalExpr(node.consequent) : evalExpr(node.alternate);
@@ -5985,6 +6552,10 @@
               return allocHeap({ type: obj ? obj.type : 'list', elements: out });
             }
             case 'MemberExpr': {
+              if (node.object.type === 'Identifier' && node.object.name === 'Integer') {
+                if (node.property === 'MAX_VALUE') return 2147483647;
+                if (node.property === 'MIN_VALUE') return -2147483648;
+              }
               const targetVal = evalExpr(node.object);
               const prop = node.property;
               if (typeof targetVal === 'string') {
@@ -5993,7 +6564,18 @@
               const obj = deref(targetVal);
               if (!obj) throw new PyRuntimeError('AttributeError', `'${pyStr(targetVal)}' has no attribute '${prop}'`, node.line);
               if (obj.type === 'list') return getListMethod(obj, prop, node.line);
-              if (obj.type === 'dict') return getDictMethod(obj, prop, node.line);
+              if (obj.type === 'dict') {
+                if (lang === 'javascript') {
+                  const foundEntry = obj.entries.find(e => pyEq(e.key, prop));
+                  if (foundEntry) return foundEntry.val;
+                }
+                try {
+                  return getDictMethod(obj, prop, node.line);
+                } catch (e) {
+                  if (lang === 'javascript') return PY_NONE;
+                  throw e;
+                }
+              }
               if (obj.type === 'set') return getSetMethod(obj, prop, node.line);
               if (obj.type === 'tuple') return getTupleMethod(obj, prop, node.line);
               if (obj.type === 'module') {
@@ -6001,6 +6583,49 @@
                 throw new PyRuntimeError('AttributeError', `module '${obj.name}' has no attribute '${prop}'`, node.line);
               }
               if (obj.type === 'instance') {
+                if (obj.className === 'Scanner') {
+                  const readNextToken = () => {
+                    while (stdinIdx < stdinLines.length && stdinLines[stdinIdx].trim() === '') stdinIdx++;
+                    if (stdinIdx >= stdinLines.length) return '';
+                    const parts = stdinLines[stdinIdx].trim().split(/\s+/);
+                    const tok = parts.shift();
+                    if (parts.length > 0) stdinLines[stdinIdx] = parts.join(' ');
+                    else stdinIdx++;
+                    return tok;
+                  };
+                  if (prop === 'nextInt' || prop === 'nextLong') return () => {
+                    const tok = readNextToken();
+                    const n = parseInt(tok, 10);
+                    return isNaN(n) ? 0 : n;
+                  };
+                  if (prop === 'nextDouble' || prop === 'nextFloat') return () => {
+                    const tok = readNextToken();
+                    const n = parseFloat(tok);
+                    return isNaN(n) ? 0.0 : n;
+                  };
+                  if (prop === 'next') return () => readNextToken();
+                  if (prop === 'nextLine') return () => {
+                    if (stdinIdx >= stdinLines.length) return '';
+                    return stdinLines[stdinIdx++];
+                  };
+                  if (prop === 'hasNext' || prop === 'hasNextInt') return () => stdinIdx < stdinLines.length && stdinLines[stdinIdx].trim() !== '';
+                  if (prop === 'close') return () => PY_NONE;
+                }
+                if (obj.className === 'StringBuilder') {
+                  if (prop === 'append') return (args) => {
+                    const cur = obj.attrs.get('value') || '';
+                    obj.attrs.set('value', cur + pyStr(args[0], false));
+                    return targetVal;
+                  };
+                  if (prop === 'reverse') return () => {
+                    const cur = obj.attrs.get('value') || '';
+                    obj.attrs.set('value', cur.split('').reverse().join(''));
+                    return targetVal;
+                  };
+                  if (prop === 'toString') return () => obj.attrs.get('value') || '';
+                  if (prop === 'length') return () => (obj.attrs.get('value') || '').length;
+                  if (prop === 'charAt') return (args) => (obj.attrs.get('value') || '')[args[0]] || '';
+                }
                 if (obj.attrs.has(prop)) return obj.attrs.get(prop);
                 const cls = deref(obj.classRef);
                 if (cls && cls.methods.has(prop)) {
@@ -6052,11 +6677,40 @@
           if (prop === 'isdigit') return () => /^\d+$/.test(s);
           if (prop === 'isalpha') return () => /^[a-zA-Z]+$/.test(s);
           if (prop === 'isalnum') return () => /^[a-zA-Z0-9]+$/.test(s);
+          if (prop === 'charAt') return (args) => {
+            const idx = args[0];
+            if (idx < 0 || idx >= s.length) throw new PyRuntimeError('IndexError', 'String index out of range', line);
+            return s[idx];
+          };
+          if (prop === 'substring') return (args) => args.length > 1 ? s.slice(args[0], args[1]) : s.slice(args[0]);
+          if (prop === 'equals') return (args) => s === String(args[0]);
+          if (prop === 'equalsIgnoreCase') return (args) => s.toLowerCase() === String(args[0]).toLowerCase();
+          if (prop === 'contains') return (args) => s.includes(String(args[0]));
+          if (prop === 'indexOf') return (args) => s.indexOf(String(args[0]));
+          if (prop === 'toLowerCase') return () => s.toLowerCase();
+          if (prop === 'toUpperCase') return () => s.toUpperCase();
+          if (prop === 'trim') return () => s.trim();
+          if (prop === 'toCharArray') return () => allocHeap({ type: 'list', elements: s.split('') });
           throw new PyRuntimeError('AttributeError', `'str' object has no attribute '${prop}'`, line);
         }
 
         function getListMethod(obj, prop, line) {
-          if (prop === 'append') return (args) => { obj.elements.push(args[0]); checkContainerMemory(obj, line); return PY_NONE; };
+          if (prop === 'append' || prop === 'add') return (args) => { obj.elements.push(args[0]); checkContainerMemory(obj, line); return true; };
+          if (prop === 'get') return (args) => {
+            const idx = args[0];
+            if (idx < 0 || idx >= obj.elements.length) throw new PyRuntimeError('IndexError', `Index ${idx} out of bounds for length ${obj.elements.length}`, line);
+            return obj.elements[idx];
+          };
+          if (prop === 'set') return (args) => {
+            const idx = args[0];
+            if (idx < 0 || idx >= obj.elements.length) throw new PyRuntimeError('IndexError', `Index ${idx} out of bounds for length ${obj.elements.length}`, line);
+            const old = obj.elements[idx];
+            obj.elements[idx] = args[1];
+            return old;
+          };
+          if (prop === 'contains') return (args) => obj.elements.some(e => pyEq(e, args[0]));
+          if (prop === 'indexOf') return (args) => obj.elements.findIndex(e => pyEq(e, args[0]));
+          if (prop === 'peek') return () => obj.elements.length > 0 ? obj.elements[obj.elements.length - 1] : PY_NONE;
           if (prop === 'pop') return (args) => {
             if (obj.elements.length === 0) throw new PyRuntimeError('IndexError', 'pop from empty list', line);
             const idx = args.length > 0 ? (args[0] < 0 ? obj.elements.length + args[0] : args[0]) : obj.elements.length - 1;
@@ -6099,6 +6753,57 @@
             return idx;
           };
           if (prop === 'count') return (args) => obj.elements.filter(e => pyEq(e, args[0])).length;
+          if (prop === 'filter') return (args) => {
+            const fn = args[0];
+            return allocHeap({
+              type: 'list',
+              elements: obj.elements.filter((el, idx) => pyBool(invokeCallable(fn, [el, idx], [], line)))
+            });
+          };
+          if (prop === 'map') return (args) => {
+            const fn = args[0];
+            return allocHeap({
+              type: 'list',
+              elements: obj.elements.map((el, idx) => invokeCallable(fn, [el, idx], [], line))
+            });
+          };
+          if (prop === 'forEach') return (args) => {
+            const fn = args[0];
+            obj.elements.forEach((el, idx) => invokeCallable(fn, [el, idx], [], line));
+            return PY_NONE;
+          };
+          if (prop === 'reduce') return (args) => {
+            const fn = args[0];
+            let idx = 0;
+            let acc = args.length > 1 ? args[1] : obj.elements[idx++];
+            for (; idx < obj.elements.length; idx++) {
+              acc = invokeCallable(fn, [acc, obj.elements[idx], idx], [], line);
+            }
+            return acc;
+          };
+          if (prop === 'find') return (args) => {
+            const fn = args[0];
+            const found = obj.elements.find((el, idx) => pyBool(invokeCallable(fn, [el, idx], [], line)));
+            return found !== undefined ? found : PY_NONE;
+          };
+          if (prop === 'some') return (args) => {
+            const fn = args[0];
+            return obj.elements.some((el, idx) => pyBool(invokeCallable(fn, [el, idx], [], line)));
+          };
+          if (prop === 'every') return (args) => {
+            const fn = args[0];
+            return obj.elements.every((el, idx) => pyBool(invokeCallable(fn, [el, idx], [], line)));
+          };
+          if (prop === 'includes') return (args) => obj.elements.some(e => pyEq(e, args[0]));
+          if (prop === 'slice') return (args) => {
+            const s = args.length > 0 ? args[0] : 0;
+            const e = args.length > 1 ? args[1] : obj.elements.length;
+            return allocHeap({ type: 'list', elements: obj.elements.slice(s, e) });
+          };
+          if (prop === 'join') return (args) => {
+            const sep = args.length > 0 ? pyStr(args[0], false) : ',';
+            return obj.elements.map(e => pyStr(e, false)).join(sep);
+          };
           throw new PyRuntimeError('AttributeError', `'list' object has no attribute '${prop}'`, line);
         }
 
@@ -6113,10 +6818,30 @@
         }
 
         function getDictMethod(obj, prop, line) {
-          if (prop === 'get') return (args) => {
+          if (prop === 'get' || prop === 'getOrDefault') return (args) => {
             const found = obj.entries.find(e => pyEq(e.key, args[0]));
             return found ? found.val : (args.length > 1 ? args[1] : PY_NONE);
           };
+          if (prop === 'put' || prop === 'set') return (args) => {
+            const found = obj.entries.find(e => pyEq(e.key, args[0]));
+            const prev = found ? found.val : PY_NONE;
+            if (found) found.val = args[1];
+            else { obj.entries.push({ key: args[0], val: args[1] }); checkContainerMemory(obj, line); }
+            return prop === 'set' ? allocHeap(obj) : prev;
+          };
+          if (prop === 'has') return (args) => obj.entries.some(e => pyEq(e.key, args[0]));
+          if (prop === 'delete') return (args) => {
+            const idx = obj.entries.findIndex(e => pyEq(e.key, args[0]));
+            if (idx >= 0) { obj.entries.splice(idx, 1); return true; }
+            return false;
+          };
+          if (prop === 'containsKey') return (args) => obj.entries.some(e => pyEq(e.key, args[0]));
+          if (prop === 'containsValue') return (args) => obj.entries.some(e => pyEq(e.val, args[0]));
+          if (prop === 'keySet') return () => allocHeap({ type: 'set', elements: obj.entries.map(e => e.key) });
+          if (prop === 'entrySet') return () => allocHeap({
+            type: 'list',
+            elements: obj.entries.map(e => allocHeap({ type: 'tuple', elements: [e.key, e.val] }))
+          });
           if (prop === 'keys') return () => allocHeap({ type: 'list', elements: obj.entries.map(e => e.key) });
           if (prop === 'values') return () => allocHeap({ type: 'list', elements: obj.entries.map(e => e.val) });
           if (prop === 'items') return () => allocHeap({
@@ -6149,16 +6874,32 @@
             }
             return PY_NONE;
           };
-          if (prop === 'copy') return () => allocHeap({ type: 'dict', entries: obj.entries.map(e => ({ key: e.key, val: e.val })) });
+          if (prop === 'most_common') return (args) => {
+            const sorted = [...obj.entries].sort((a, b) => Number(b.val) - Number(a.val));
+            const n = args.length > 0 && args[0] !== PY_NONE ? args[0] : sorted.length;
+            return allocHeap({
+              type: 'list',
+              elements: sorted.slice(0, n).map(e => allocHeap({ type: 'tuple', elements: [e.key, e.val] }))
+            });
+          };
+          if (prop === 'elements') return () => {
+            const out = [];
+            for (const e of obj.entries) {
+              for (let c = 0; c < Number(e.val); c++) out.push(e.key);
+            }
+            return allocHeap({ type: 'list', elements: out });
+          };
+          if (prop === 'copy') return () => allocHeap({ type: 'dict', entries: obj.entries.map(e => ({ key: e.key, val: e.val })), defaultFactory: obj.defaultFactory });
           if (prop === 'clear') return () => { obj.entries.length = 0; return PY_NONE; };
           throw new PyRuntimeError('AttributeError', `'dict' object has no attribute '${prop}'`, line);
         }
 
         function getSetMethod(obj, prop, line) {
           if (prop === 'add') return (args) => {
-            if (!obj.elements.some(e => pyEq(e, args[0]))) obj.elements.push(args[0]);
-            return PY_NONE;
+            if (!obj.elements.some(e => pyEq(e, args[0]))) { obj.elements.push(args[0]); checkContainerMemory(obj, line); return true; }
+            return false;
           };
+          if (prop === 'contains') return (args) => obj.elements.some(e => pyEq(e, args[0]));
           if (prop === 'remove') return (args) => {
             const idx = obj.elements.findIndex(e => pyEq(e, args[0]));
             if (idx < 0) throw new PyRuntimeError('KeyError', pyStr(args[0], true), line);
@@ -6247,17 +6988,114 @@
             exports.set('defaultdict', (a) => {
               return allocHeap({ type: 'dict', entries: [], defaultFactory: a[0] || '__builtin__:int' });
             });
+            exports.set('OrderedDict', (a, kw, line) => {
+              return callBuiltin('dict', a, kw, line);
+            });
             exports.set('Counter', (a, kw, line) => {
               const entries = [];
               if (a.length > 0) {
-                for (const item of toIterableArray(a[0], line)) {
-                  const ex = entries.find(e => pyEq(e.key, item));
-                  if (ex) ex.val += 1;
-                  else entries.push({ key: item, val: 1 });
+                const srcObj = deref(a[0]);
+                if (srcObj && srcObj.type === 'dict') {
+                  for (const e of srcObj.entries) entries.push({ key: e.key, val: e.val });
+                } else {
+                  for (const item of toIterableArray(a[0], line)) {
+                    const ex = entries.find(e => pyEq(e.key, item));
+                    if (ex) ex.val += 1;
+                    else entries.push({ key: item, val: 1 });
+                  }
                 }
               }
-              return allocHeap({ type: 'dict', entries, defaultFactory: '__builtin__:int' });
+              for (const kItem of kw) {
+                const ex = entries.find(e => pyEq(e.key, kItem.key));
+                if (ex) ex.val = kItem.val;
+                else entries.push({ key: kItem.key, val: kItem.val });
+              }
+              return allocHeap({ type: 'dict', entries, defaultFactory: '__builtin__:int', isCounter: true });
             });
+          } else if (modName === 'itertools') {
+            exports.set('accumulate', (a, kw, line) => {
+              const seq = toIterableArray(a[0], line);
+              const out = [];
+              let acc = null;
+              for (const x of seq) {
+                acc = acc === null ? x : (a[1] ? invokeCallable(a[1], [acc, x], [], line) : acc + x);
+                out.push(acc);
+              }
+              return allocHeap({ type: 'list', elements: out });
+            });
+            exports.set('chain', (a, kw, line) => {
+              const out = [];
+              for (const it of a) out.push(...toIterableArray(it, line));
+              return allocHeap({ type: 'list', elements: out });
+            });
+            exports.set('combinations', (a, kw, line) => {
+              const pool = toIterableArray(a[0], line);
+              const r = a[1];
+              const res = [];
+              function rec(start, comb) {
+                if (comb.length === r) { res.push(allocHeap({ type: 'tuple', elements: [...comb] })); return; }
+                for (let i = start; i <= pool.length - (r - comb.length); i++) {
+                  comb.push(pool[i]); rec(i + 1, comb); comb.pop();
+                }
+              }
+              rec(0, []);
+              return allocHeap({ type: 'list', elements: res });
+            });
+            exports.set('permutations', (a, kw, line) => {
+              const pool = toIterableArray(a[0], line);
+              const r = a.length > 1 ? a[1] : pool.length;
+              const res = [];
+              const used = new Array(pool.length).fill(false);
+              function rec(perm) {
+                if (perm.length === r) { res.push(allocHeap({ type: 'tuple', elements: [...perm] })); return; }
+                for (let i = 0; i < pool.length; i++) {
+                  if (used[i]) continue;
+                  used[i] = true; perm.push(pool[i]); rec(perm); perm.pop(); used[i] = false;
+                }
+              }
+              rec([]);
+              return allocHeap({ type: 'list', elements: res });
+            });
+            exports.set('product', (a, kw, line) => {
+              const pools = a.map(x => toIterableArray(x, line));
+              let res = [[]];
+              for (const pool of pools) {
+                const next = [];
+                for (const prefix of res) for (const item of pool) next.push([...prefix, item]);
+                res = next;
+              }
+              return allocHeap({ type: 'list', elements: res.map(t => allocHeap({ type: 'tuple', elements: t })) });
+            });
+          } else if (modName === 'functools') {
+            exports.set('reduce', (a, kw, line) => {
+              const fn = a[0];
+              const seq = toIterableArray(a[1], line);
+              let idx = 0;
+              let acc = a.length > 2 ? a[2] : seq[idx++];
+              for (; idx < seq.length; idx++) acc = invokeCallable(fn, [acc, seq[idx]], [], line);
+              return acc;
+            });
+            exports.set('lru_cache', () => (args) => args[0]);
+            exports.set('cache', (args) => args[0]);
+          } else if (modName === 'string') {
+            exports.set('ascii_lowercase', 'abcdefghijklmnopqrstuvwxyz');
+            exports.set('ascii_uppercase', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+            exports.set('ascii_letters', 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
+            exports.set('digits', '0123456789');
+          } else if (modName === 'statistics') {
+            exports.set('mean', (a, kw, line) => {
+              const s = toIterableArray(a[0], line);
+              return s.reduce((acc, v) => acc + v, 0) / s.length;
+            });
+            exports.set('median', (a, kw, line) => {
+              const s = [...toIterableArray(a[0], line)].sort((x, y) => x - y);
+              const m = Math.floor(s.length / 2);
+              return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+            });
+          } else if (modName === 'operator') {
+            exports.set('add', (a) => a[0] + a[1]);
+            exports.set('sub', (a) => a[0] - a[1]);
+            exports.set('mul', (a) => a[0] * a[1]);
           } else if (modName === 'heapq') {
             exports.set('heappush', (a, kw, line) => {
               const o = deref(a[0]);
@@ -6353,7 +7191,9 @@
                 if (item.name === '*') {
                   for (const [k, v] of modObj.exports.entries()) setVar(k, v);
                 } else if (modObj.exports.has(item.name)) {
-                  setVar(item.alias, modObj.exports.get(item.name));
+                  const expVal = modObj.exports.get(item.name);
+                  if (typeof expVal === 'function' && !expVal._pyName) expVal._pyName = item.name;
+                  setVar(item.alias, expVal);
                 }
               }
               return;
@@ -6362,6 +7202,19 @@
               recordStep(line, EVENT_LINE);
               const top = frames[frames.length - 1];
               const defaultVals = stmt.params.map(p => p.defaultExpr ? evalExpr(p.defaultExpr) : undefined);
+              const containsYield = (stmts) => {
+                if (!Array.isArray(stmts)) return false;
+                for (const s of stmts) {
+                  if (!s) continue;
+                  if (s.type === 'YieldStmt' || s.type === 'YieldFromStmt') return true;
+                  if (s.body && containsYield(s.body)) return true;
+                  if (s.consequent && containsYield(s.consequent)) return true;
+                  if (s.alternate && containsYield(s.alternate)) return true;
+                  if (s.elifs && s.elifs.some(e => containsYield(e.body))) return true;
+                  if (s.orelse && containsYield(s.orelse)) return true;
+                }
+                return false;
+              };
               const fnRef = allocHeap({
                 type: 'function',
                 name: stmt.name,
@@ -6371,6 +7224,7 @@
                 kwarg: stmt.kwarg,
                 body: stmt.body,
                 isLambda: false,
+                isGenerator: containsYield(stmt.body),
                 parentFrameId: top.isGlobal ? null : top.frameId,
                 defLine: line
               });
@@ -6445,6 +7299,20 @@
             case 'ExprStmt': {
               recordStep(line, EVENT_LINE);
               evalExpr(stmt.expr);
+              return;
+            }
+            case 'YieldStmt': {
+              recordStep(line, EVENT_LINE);
+              const val = stmt.value ? evalExpr(stmt.value) : PY_NONE;
+              const top = frames[frames.length - 1];
+              if (top && top._yieldBucket) top._yieldBucket.push(val);
+              return;
+            }
+            case 'YieldFromStmt': {
+              recordStep(line, EVENT_LINE);
+              const seq = toIterableArray(evalExpr(stmt.value), line);
+              const top = frames[frames.length - 1];
+              if (top && top._yieldBucket) top._yieldBucket.push(...seq);
               return;
             }
             case 'ReturnStmt': {
@@ -6560,6 +7428,30 @@
                 }
               }
               if (!broke && stmt.orelse) execBlock(stmt.orelse);
+              return;
+            }
+            case 'WithStmt': {
+              recordStep(line, EVENT_LINE);
+              for (const item of stmt.items) {
+                const val = evalExpr(item.ctxExpr);
+                if (item.varTarget) assignTarget(item.varTarget, val, line);
+              }
+              execBlock(stmt.body);
+              return;
+            }
+            case 'MatchStmt': {
+              recordStep(line, EVENT_LINE);
+              const subj = evalExpr(stmt.subject);
+              for (const c of stmt.cases) {
+                let matched = c.isWildcard;
+                if (!matched && c.pattern) {
+                  matched = pyEq(subj, evalExpr(c.pattern));
+                }
+                if (matched && (!c.guard || pyBool(evalExpr(c.guard)))) {
+                  execBlock(c.body);
+                  return;
+                }
+              }
               return;
             }
             case 'TryStmt': {
@@ -8640,86 +9532,10 @@ class Program {
           return;
         }
 
-        // Delete matching empty pair if cursor is between them: (), [], {}, "", ''
-        const charBefore = val[start - 1];
-        const charAfter = val[start];
-        const isPair = (
-          (charBefore === '(' && charAfter === ')') ||
-          (charBefore === '[' && charAfter === ']') ||
-          (charBefore === '{' && charAfter === '}') ||
-          (charBefore === '"' && charAfter === '"') ||
-          (charBefore === "'" && charAfter === "'")
-        );
-        if (isPair) {
-          e.preventDefault();
-          codeTextarea.value = val.slice(0, start - 1) + val.slice(start + 1);
-          codeTextarea.selectionStart = codeTextarea.selectionEnd = start - 1;
-          renderEditorGutterAndHighlights();
-          return;
-        }
+
       }
 
-      // --------------------------------------------------------------------------
-      // 4. AUTO-CLOSING PAIRS & OVERTYPE STEPPING
-      // --------------------------------------------------------------------------
-      const pairs = { '(': ')', '[': ']', '{': '}' };
-      if (pairs[e.key]) {
-        const closing = pairs[e.key];
-        if (start !== end) {
-          // Wrap selection
-          e.preventDefault();
-          const selText = val.slice(start, end);
-          const wrapped = e.key + selText + closing;
-          codeTextarea.value = val.slice(0, start) + wrapped + val.slice(end);
-          codeTextarea.selectionStart = start + 1;
-          codeTextarea.selectionEnd = start + 1 + selText.length;
-          renderEditorGutterAndHighlights();
-          return;
-        } else {
-          // Insert pair with cursor inside
-          e.preventDefault();
-          codeTextarea.value = val.slice(0, start) + e.key + closing + val.slice(end);
-          codeTextarea.selectionStart = codeTextarea.selectionEnd = start + 1;
-          renderEditorGutterAndHighlights();
-          return;
-        }
-      }
-
-      // Quotes: auto-close if not preceded by word character
-      if (e.key === '"' || e.key === "'") {
-        const quote = e.key;
-        if (start !== end) {
-          e.preventDefault();
-          const selText = val.slice(start, end);
-          const wrapped = quote + selText + quote;
-          codeTextarea.value = val.slice(0, start) + wrapped + val.slice(end);
-          codeTextarea.selectionStart = start + 1;
-          codeTextarea.selectionEnd = start + 1 + selText.length;
-          renderEditorGutterAndHighlights();
-          return;
-        } else if (val[start] === quote) {
-          // Step over quote
-          e.preventDefault();
-          codeTextarea.selectionStart = codeTextarea.selectionEnd = start + 1;
-          return;
-        } else {
-          const prevChar = start > 0 ? val[start - 1] : '';
-          if (!/[a-zA-Z0-9_]/.test(prevChar)) {
-            e.preventDefault();
-            codeTextarea.value = val.slice(0, start) + quote + quote + val.slice(end);
-            codeTextarea.selectionStart = codeTextarea.selectionEnd = start + 1;
-            renderEditorGutterAndHighlights();
-            return;
-          }
-        }
-      }
-
-      // Step over closing bracket if typed
-      if ((e.key === ')' || e.key === ']' || e.key === '}') && start === end && val[start] === e.key) {
-        e.preventDefault();
-        codeTextarea.selectionStart = codeTextarea.selectionEnd = start + 1;
-        return;
-      }
+// Auto-closing brackets disabled: user manually types closing brackets
 
 
 
@@ -8814,10 +9630,18 @@ class Program {
 
     function renderEditorGutterAndHighlights() {
       const lines = codeTextarea.value.split('\n');
-      const snap = currentTrace ? currentTrace.getStepSnapshot(currentStepIdx) : null;
-      const nextLine = snap ? snap.line : -1;
-      const prevLine = snap ? snap.prevLine : -1;
-      const counts = currentTrace ? currentTrace.lineExecCounts : {};
+      const hasSyntaxErr = Boolean(currentTrace && currentTrace.syntaxError);
+      const errLinesSet = new Set();
+      if (hasSyntaxErr) {
+        if (Array.isArray(currentTrace.syntaxError.allErrors)) {
+          currentTrace.syntaxError.allErrors.forEach(e => { if (e && e.line) errLinesSet.add(e.line); });
+        }
+        if (currentTrace.syntaxError.line) errLinesSet.add(currentTrace.syntaxError.line);
+      }
+      const snap = (!hasSyntaxErr && currentTrace) ? currentTrace.getStepSnapshot(currentStepIdx) : null;
+      const nextLine = hasSyntaxErr ? (currentTrace.syntaxError.line || -1) : (snap ? snap.line : -1);
+      const prevLine = hasSyntaxErr ? -1 : (snap ? snap.prevLine : -1);
+      const counts = (!hasSyntaxErr && currentTrace && currentTrace.lineExecCounts) ? currentTrace.lineExecCounts : {};
 
       // Compute cursor current line index for active indent guide highlighting
       const curPos = codeTextarea.selectionStart || 0;
@@ -8828,12 +9652,12 @@ class Program {
       let backdropHtml = '';
 
       for (let i = 1; i <= lines.length; i++) {
-        const isNext = (i === nextLine);
+        const isNext = (i === nextLine) || errLinesSet.has(i);
         const isPrev = (i === prevLine && prevLine > 0);
         const hasBp = breakpoints.has(i);
         let arrowHtml = '<span class="arrow-indicator"></span>';
         if (isNext) {
-          arrowHtml = '<span class="arrow-indicator arrow-next" title="Next line to execute">➔</span>';
+          arrowHtml = `<span class="arrow-indicator arrow-next" title="${hasSyntaxErr ? 'Error on this line' : 'Next line to execute'}">➔</span>`;
         } else if (isPrev) {
           arrowHtml = '<span class="arrow-indicator arrow-prev" title="Line just executed">➔</span>';
         }
@@ -8912,8 +9736,22 @@ class Program {
       if (valObj.kind === 'num') {
         return `<span class="mono text-slate-900">${escapeHtml(valObj.val)}</span>`;
       }
+      if (valObj.kind === 'func') {
+        const full = String(valObj.val);
+        if (full.length > 12) {
+          const shortTxt = full.slice(0, 10) + '…';
+          return `<span class="text-purple-700 dark:text-purple-300 mono cursor-pointer underline decoration-dotted" data-full-val="${escapeHtml(full)}" data-short-val="${escapeHtml(shortTxt)}" data-expanded="0" onclick="toggleExpandVal(this)" title="Click to expand/collapse: ${escapeHtml(full)}">${escapeHtml(shortTxt)}</span>`;
+        }
+        return `<span class="text-purple-700 dark:text-purple-300 mono">${escapeHtml(full)}</span>`;
+      }
       if (valObj.kind === 'str') {
-        return `<span class="text-amber-900 mono">'${escapeHtml(valObj.val)}'</span>`;
+        const rawStr = String(valObj.val);
+        if (rawStr.length > 14 && sourceKey.startsWith('frame-')) {
+          const shortTxt = "'" + rawStr.slice(0, 10) + "…'";
+          const fullTxt = "'" + rawStr + "'";
+          return `<span class="text-amber-900 mono cursor-pointer underline decoration-dotted" data-full-val="${escapeHtml(fullTxt)}" data-short-val="${escapeHtml(shortTxt)}" data-expanded="0" onclick="toggleExpandVal(this)" title="Click to expand/collapse: ${escapeHtml(fullTxt)}">${escapeHtml(shortTxt)}</span>`;
+        }
+        return `<span class="text-amber-900 mono">'${escapeHtml(rawStr)}'</span>`;
       }
       if (valObj.kind === 'ref') {
         const drawArrows = document.getElementById('chkDrawArrows').checked;
@@ -8925,6 +9763,22 @@ class Program {
       }
       return `<span class="mono">${escapeHtml(String(valObj.val))}</span>`;
     }
+
+
+    window.toggleExpandVal = function(el) {
+      const expanded = el.getAttribute('data-expanded') === '1';
+      if (expanded) {
+        el.textContent = el.getAttribute('data-short-val');
+        el.setAttribute('data-expanded', '0');
+      } else {
+        el.textContent = el.getAttribute('data-full-val');
+        el.setAttribute('data-expanded', '1');
+      }
+      requestAnimationFrame(() => {
+        if (typeof alignHeapWithActiveFrame === 'function') alignHeapWithActiveFrame();
+        if (typeof drawPointerArrows === 'function') drawPointerArrows();
+      });
+    };
 
     function escapeHtml(str) {
       return String(str)
@@ -8975,9 +9829,16 @@ class Program {
         </div>`;
           }
         }
+        const seqLabel = obj.subType || (
+          obj.type === 'list'
+            ? (currentLanguage === 'python' ? 'list' : (currentLanguage === 'cpp' ? 'vector / array' : (currentLanguage === 'javascript' ? 'Array' : 'array')))
+            : (obj.type === 'set'
+              ? (currentLanguage === 'java' ? 'HashSet / Set' : (currentLanguage === 'javascript' ? 'Set' : 'set'))
+              : obj.type)
+        );
         return `<div class="heap-obj-wrapper" ${staggerStyle}>
       <div class="heap-type-label">
-        <span>${obj.type === 'list' ? (currentLanguage === 'python' ? 'list' : (currentLanguage === 'cpp' ? 'vector / array' : 'array')) : obj.type}</span>
+        <span>${escapeHtml(seqLabel)}</span>
         <span class="heap-id-tag mono">id${id}</span>
       </div>
       <div class="heap-obj-card ${typeCls}" id="heap-obj-${id}" data-heap-id="${id}">
@@ -9001,9 +9862,17 @@ class Program {
         </tr>`;
           }
         }
+        const dictLabel = obj.subType || ({
+          python: 'dict',
+          java: 'HashMap / Map',
+          javascript: 'Object',
+          cpp: 'map / unordered_map',
+          csharp: 'Dictionary',
+          c: 'map'
+        }[currentLanguage] || 'dict');
         return `<div class="heap-obj-wrapper" ${staggerStyle}>
       <div class="heap-type-label">
-        <span>dict</span>
+        <span>${escapeHtml(dictLabel)}</span>
         <span class="heap-id-tag mono">id${id}</span>
       </div>
       <div class="heap-obj-card heap-dict" id="heap-obj-${id}" data-heap-id="${id}">
@@ -9923,9 +10792,9 @@ class Program {
       stopPlayback();
       const code = codeTextarea.value;
       const stdinVal = document.getElementById('stdinTextarea').value;
-      const rawInputSteps = parseInt(maxStepsInput.value, 10) || 500_000;
-      const userExceeded50K = rawInputSteps > 50_000;
-      const maxStepsVal = Math.min(50_000, Math.max(10, rawInputSteps));
+      const rawInputSteps = parseInt(maxStepsInput.value, 10) || 20_000;
+      const userExceeded50K = rawInputSteps > 20_000;
+      const maxStepsVal = Math.min(20_000, Math.max(10, rawInputSteps));
       maxStepsInput.value = String(maxStepsVal);
 
       const langSelectEl = document.getElementById('langSelect');
@@ -9961,11 +10830,17 @@ class Program {
 
       if (trace.syntaxError) {
         exceptionBox.classList.remove('hidden');
-        exceptionTitle.textContent = `${langNames[currentLanguage] || 'Syntax'} Error`;
-        exceptionLineBadge.textContent = `Line ${trace.syntaxError.line}`;
+        const errCount = trace.syntaxError.allErrors ? trace.syntaxError.allErrors.length : 1;
+        exceptionTitle.textContent = errCount > 1
+          ? `${langNames[currentLanguage] || 'Compiler'} Errors (${errCount} errors)`
+          : `${langNames[currentLanguage] || 'Syntax'} Error`;
+        exceptionLineBadge.textContent = errCount > 1
+          ? `Lines ${trace.syntaxError.allErrors.map(e => e.line).join(', ')}`
+          : `Line ${trace.syntaxError.line}`;
         exceptionDetail.textContent = trace.syntaxError.message;
-        tracePerfBadge.textContent = 'Syntax Error';
+        tracePerfBadge.textContent = errCount > 1 ? `${errCount} Compiler Errors` : 'Syntax Error';
         renderEditorGutterAndHighlights();
+        scrollEditorToActiveLine(trace.syntaxError.line);
         return;
       }
 
@@ -9973,7 +10848,7 @@ class Program {
         trace.exceptionInfo = {
           limitType: 'TLE',
           line: trace.stepLines[trace.totalSteps - 1] || 1,
-          message: 'TimeLimitExceeded (TLE): Step limit > 50,000 (50K) is not allowed — capped at 50,000 steps to prevent system hang.'
+          message: 'TimeLimitExceeded (TLE): Step limit > 20,000 (20K) is not allowed — capped at 20,000 steps to prevent system hang.'
         };
         trace.limitErrorType = 'TLE';
         trace.truncatedAtLimit = true;
