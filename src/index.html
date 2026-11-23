@@ -1594,15 +1594,43 @@
 
       0%,
       100% {
-        box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.65), 0 0 14px rgba(239, 68, 68, 0.75);
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.65), 0 0 14px rgba(239, 68, 68, 0.75);
       }
 
       50% {
-        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.75), 0 0 22px rgba(34, 197, 94, 0.85);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.75), 0 0 22px rgba(239, 68, 68, 0.85);
       }
     }
 
+
+    /* @keyframes nextBtnPulseRing {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.65), 0 0 14px rgba(250, 204, 21, 0.75);
+      }
+
+      50% {
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.75), 0 0 22px rgba(239, 68, 68, 0.85);
+      }
+    } */
+
+
     #btnNext.next-ready-glow {
+      position: relative;
+      z-index: 5;
+      background-color: #2563eb !important;
+      border: 0.5px solid #ef4444 !important;
+      animation: nextBtnPulseRing 1.6s ease-in-out infinite !important;
+    }
+
+    body.dark-mode #workspaceGrid #btnNext.next-ready-glow {
+      background-color: #2563eb !important;
+      border: 0.5px solid #ef4444 !important;
+    }
+
+
+    /* #btnNext.next-ready-glow {
       position: relative;
       z-index: 5;
       border: 2.5px solid transparent !important;
@@ -1629,7 +1657,7 @@
           #ef4444 360deg) !important;
       background-origin: border-box !important;
       background-clip: padding-box, border-box !important;
-    }
+    } */
   </style>
 </head>
 
