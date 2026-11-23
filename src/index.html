@@ -1928,17 +1928,17 @@
               -10
             </button>
             <button id="btnPrev" type="button" title="Previous Step (Left Arrow)"
-              class="px-3 py-1 rounded border border-blue-600 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition">
+              class="px-3 py-1 rounded-full border border-blue-600 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition">
               &lt; Prev
             </button>
 
             <button id="btnPlay" type="button" title="Play / Pause Auto-Stepping (Space)"
-              class="px-3.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition min-w-[72px]">
+              class="px-2 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition">
               ▶ Play
             </button>
 
             <button id="btnNext" type="button" title="Next Step (Right Arrow)"
-              class="px-3 py-1 rounded border border-blue-600 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition">
+              class="px-3 py-1 rounded-full border border-blue-600 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition">
               Next &gt;
             </button>
             <button id="btnFwd10" type="button" title="Step Forward 10 Steps"
@@ -10859,7 +10859,7 @@ class Program {
         playTimer = null;
       }
       const btnPlay = document.getElementById('btnPlay');
-      btnPlay.textContent = '▶ Play';
+      btnPlay.textContent = '▶';
       btnPlay.classList.remove('bg-amber-600', 'hover:bg-amber-500');
       btnPlay.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
     }
@@ -10874,7 +10874,7 @@ class Program {
         currentStepIdx = 0;
       }
       const btnPlay = document.getElementById('btnPlay');
-      btnPlay.textContent = '⏸ Pause';
+      btnPlay.textContent = '⏸';
       btnPlay.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
       btnPlay.classList.add('bg-amber-600', 'hover:bg-amber-500');
 
