@@ -1115,9 +1115,9 @@
       color: #94a3b8 !important;
     }
 
-    body.dark-mode #workspaceGrid .text-amber-900 {
+    /* body.dark-mode #workspaceGrid .text-amber-900 {
       color: #93c5fd !important;
-    }
+    } */
 
     body.dark-mode #workspaceGrid #curStepNum {
       color: #93c5fd !important;
@@ -1259,6 +1259,25 @@
     body.dark-mode #btnClearBps:hover,
     body.dark-mode #btnFormatIndent:hover {
       background-color: #282f42 !important;
+      color: #ffffff !important;
+    }
+
+    #btnVisualize {
+      border-radius: 10px !important;
+    }
+
+    #btnPlay {
+      border-radius: 9999px !important;
+    }
+
+    body.dark-mode #btnResetCode {
+      background-color: rgba(250, 204, 21, 0.20) !important;
+      border-color: rgba(250, 204, 21, 0.50) !important;
+      color: #fef08a !important;
+    }
+
+    body.dark-mode #btnResetCode:hover {
+      background-color: rgba(250, 204, 21, 0.34) !important;
       color: #ffffff !important;
     }
 
@@ -1553,6 +1572,68 @@
     .backdrop-line {
       position: relative;
     }
+
+    /* Circular Rotating Glow Hint on Next > Button After Successful Compile/Interpret */
+    @property --next-glow-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    @keyframes nextBtnOrbitSpin {
+      0% {
+        --next-glow-angle: 0deg;
+      }
+
+      100% {
+        --next-glow-angle: 360deg;
+      }
+    }
+
+    @keyframes nextBtnPulseRing {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.65), 0 0 14px rgba(239, 68, 68, 0.75);
+      }
+
+      50% {
+        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.75), 0 0 22px rgba(34, 197, 94, 0.85);
+      }
+    }
+
+    #btnNext.next-ready-glow {
+      position: relative;
+      z-index: 5;
+      border: 2.5px solid transparent !important;
+      background-image:
+        linear-gradient(#2563eb, #2563eb),
+        conic-gradient(from var(--next-glow-angle),
+          #ec4899 0deg,
+          #ef4444 90deg,
+          #facc15 180deg,
+          #22c55e 270deg,
+          #ec4899 360deg) !important;
+      background-origin: border-box !important;
+      background-clip: padding-box, border-box !important;
+      animation:
+        nextBtnOrbitSpin 1.4s linear infinite,
+        nextBtnPulseRing 1.6s ease-in-out infinite !important;
+    }
+
+    body.dark-mode #workspaceGrid #btnNext.next-ready-glow {
+      border: 2.5px solid transparent !important;
+      background-image:
+        linear-gradient(#2563eb, #2563eb),
+        conic-gradient(from var(--next-glow-angle),
+          #ec4899 0deg,
+          #ef4444 90deg,
+          #facc15 180deg,
+          #22c55e 270deg,
+          #ec4899 360deg) !important;
+      background-origin: border-box !important;
+      background-clip: padding-box, border-box !important;
+    }
   </style>
 </head>
 
@@ -1596,7 +1677,7 @@
           <label for="presetSelect" class="text-[11px] font-medium text-slate-400 whitespace-nowrap">Example:</label>
           <select id="presetSelect"
             class="bg-transparent text-xs font-medium text-slate-100 focus:outline-none cursor-pointer pr-1">
-            <option value="starter" selected>0. Default Starter (Hello Code Vision)</option>
+            <option value="starter" selected>0. Default Starter (Hello Code D Buggy)</option>
             <option value="linked_list">1. Singly Linked List Reversal (Horizontal Pointers)</option>
             <option value="doubly_linked">2. Doubly Linked List Insert (next &amp; prev Pointers)</option>
             <option value="bst">3. Binary Search Tree (Recursive Heap Graph)</option>
@@ -1687,6 +1768,11 @@
               title="Clean and standardize indentation to 4 spaces across all lines"
               class="px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
               Format
+            </button>
+            <button id="btnResetCode" type="button"
+              title="Reset editor to the default starter template for the current language"
+              class="px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-amber-100 border border-amber-300 text-amber-900 hover:bg-amber-200">
+              Reset
             </button>
             <button id="btnClearCode" type="button" title="Clear all code in the editor and reset visualizer"
               class="px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100">
@@ -1825,7 +1911,7 @@
         <div class="flex flex-wrap items-center justify-between gap-1">
           <div class="flex flex-wrap items-center gap-1">
             <button id="btnVisualize" type="button" title="Visualize Execution (Ctrl+Enter)"
-              class="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-2.5 py-1 rounded shadow-sm transition cursor-pointer">
+              class="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-2.5 py-1 rounded-[10px] shadow-sm transition cursor-pointer">
               <span>▶ Visualize</span>
               <span class="hidden">Execution (Ctrl+Enter)</span>
             </button>
@@ -1847,7 +1933,7 @@
             </button>
 
             <button id="btnPlay" type="button" title="Play / Pause Auto-Stepping (Space)"
-              class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition min-w-[68px]">
+              class="px-3.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm transition min-w-[72px]">
               ▶ Play
             </button>
 
@@ -1869,16 +1955,8 @@
             </button>
           </div>
 
-          <!-- Speed & Breakpoint Jump Controls -->
+          <!-- Breakpoint Jump & Speed Controls -->
           <div class="flex items-center gap-1">
-            <select id="playSpeedSelect" aria-label="Playback speed"
-              class="text-[11px] font-semibold bg-slate-100 border border-slate-300 rounded px-1.5 py-1 text-slate-700 focus:outline-none">
-              <option value="1">1× Speed</option>
-              <option value="5">5× Speed</option>
-              <option value="25" selected>25× Speed</option>
-              <option value="150">150× Fast</option>
-              <option value="1000">1000× Turbo</option>
-            </select>
             <button id="btnPrevBp" type="button" title="Jump to Previous Breakpoint"
               class="px-1.5 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-semibold transition">
               ●&lt; BP
@@ -1887,6 +1965,14 @@
               class="px-1.5 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-semibold transition">
               BP &gt;●
             </button>
+            <select id="playSpeedSelect" aria-label="Playback speed"
+              class="text-[11px] font-semibold bg-slate-100 border border-slate-300 rounded px-1.5 py-1 text-slate-700 focus:outline-none">
+              <option value="1">1× Speed</option>
+              <option value="5">5× Speed</option>
+              <option value="25" selected>25× Speed</option>
+              <option value="150">150× Fast</option>
+              <option value="1000">1000× Turbo</option>
+            </select>
           </div>
         </div>
       </div>
@@ -7597,20 +7683,20 @@
       starter: {
         watches: [],
         python: `# change your code here
-print("Hello Code Vision")`,
+print("Hello Code D Buggy")`,
         java: `// change your code here
 public class Main {
     public static void main(String[] args) {
-        System.out.println("Hello Code Vision");
+        System.out.println("Hello Code D Buggy");
     }
 }`,
         javascript: `// change your code here
-console.log("Hello Code Vision");`,
+console.log("Hello Code D Buggy");`,
         c: `// change your code here
 #include <stdio.h>
 
 int main() {
-    printf("Hello Code Vision");
+    printf("Hello Code D Buggy");
     return 0;
 }`,
         cpp: `// change your code here
@@ -7618,7 +7704,7 @@ int main() {
 using namespace std;
 
 int main() {
-    cout << "Hello Code Vision" << endl;
+    cout << "Hello Code D Buggy" << endl;
     return 0;
 }`,
         csharp: `// change your code here
@@ -7626,7 +7712,7 @@ using System;
 
 class Program {
     static void Main(string[] args) {
-        Console.WriteLine("Hello Code Vision");
+        Console.WriteLine("Hello Code D Buggy");
     }
 }`
       },
@@ -9372,7 +9458,7 @@ class Program {
       // Shortcut: Ctrl+Enter / Cmd+Enter -> Run Visualization
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        runVisualization();
+        runVisualization(true);
         return;
       }
 
@@ -9535,7 +9621,7 @@ class Program {
 
       }
 
-// Auto-closing brackets disabled: user manually types closing brackets
+      // Auto-closing brackets disabled: user manually types closing brackets
 
 
 
@@ -9564,6 +9650,19 @@ class Program {
         codeTextarea.value = formatted;
         renderEditorGutterAndHighlights();
         showBanner('Cleaned and standardized 4-space indentation across all code lines.');
+      });
+    }
+
+    // Reset Button Functionality: clears user edits and restores default starter template for current language
+    const btnResetCode = document.getElementById('btnResetCode');
+    if (btnResetCode) {
+      btnResetCode.addEventListener('click', () => {
+        stopPlayback();
+        const btnNextEl = document.getElementById('btnNext');
+        if (btnNextEl) btnNextEl.classList.remove('next-ready-glow');
+        presetSelect.value = 'starter';
+        loadPreset('starter', currentLanguage, true);
+        codeTextarea.focus();
       });
     }
 
@@ -9597,6 +9696,7 @@ class Program {
         pointerSvgOverlay.innerHTML = '';
         memorySummaryBadge.textContent = '0 frames · 0 objects';
 
+        if (typeof saveEditorState === 'function') saveEditorState();
         renderEditorGutterAndHighlights();
         drawTimelineMinimap();
         codeTextarea.focus();
@@ -9604,6 +9704,8 @@ class Program {
     }
 
     codeTextarea.addEventListener('input', () => {
+      const btnNextEl = document.getElementById('btnNext');
+      if (btnNextEl) btnNextEl.classList.remove('next-ready-glow');
       renderEditorGutterAndHighlights();
     });
 
@@ -9765,7 +9867,7 @@ class Program {
     }
 
 
-    window.toggleExpandVal = function(el) {
+    window.toggleExpandVal = function (el) {
       const expanded = el.getAttribute('data-expanded') === '1';
       if (expanded) {
         el.textContent = el.getAttribute('data-short-val');
@@ -10788,8 +10890,9 @@ class Program {
       }, 55);
     }
 
-    function runVisualization() {
+    function runVisualization(fromUserCompile = false) {
       stopPlayback();
+      if (typeof saveEditorState === 'function') saveEditorState();
       const code = codeTextarea.value;
       const stdinVal = document.getElementById('stdinTextarea').value;
       const rawInputSteps = parseInt(maxStepsInput.value, 10) || 20_000;
@@ -10827,6 +10930,9 @@ class Program {
 
       const trace = executePythonExecution(code, stdinVal, maxStepsVal, currentLanguage);
       currentTrace = trace;
+
+      const btnNextEl = document.getElementById('btnNext');
+      if (btnNextEl) btnNextEl.classList.remove('next-ready-glow');
 
       if (trace.syntaxError) {
         exceptionBox.classList.remove('hidden');
@@ -10878,6 +10984,9 @@ class Program {
 
       currentStepIdx = 0;
       renderCurrentStep();
+      if (btnNextEl && fromUserCompile === true && trace.totalSteps > 1) {
+        btnNextEl.classList.add('next-ready-glow');
+      }
     }
 
     // Wire Transport Controls (-100, -10, Prev, Play, Next, +10, +100)
@@ -10886,7 +10995,11 @@ class Program {
     document.getElementById('btnBack10').addEventListener('click', () => { stopPlayback(); goToStep(currentStepIdx - 10); });
     document.getElementById('btnPrev').addEventListener('click', () => { stopPlayback(); goToStep(currentStepIdx - 1); });
     document.getElementById('btnPlay').addEventListener('click', togglePlayback);
-    document.getElementById('btnNext').addEventListener('click', () => { stopPlayback(); goToStep(currentStepIdx + 1); });
+    document.getElementById('btnNext').addEventListener('click', (e) => {
+      e.currentTarget.classList.remove('next-ready-glow');
+      stopPlayback();
+      goToStep(currentStepIdx + 1);
+    });
     document.getElementById('btnFwd10').addEventListener('click', () => { stopPlayback(); goToStep(currentStepIdx + 10); });
     document.getElementById('btnFwd100').addEventListener('click', () => { stopPlayback(); goToStep(currentStepIdx + 100); });
     document.getElementById('btnLast').addEventListener('click', () => {
@@ -11084,29 +11197,98 @@ class Program {
     btnModeEditor.addEventListener('click', () => setLayoutMode('editor'));
     btnModeViz.addEventListener('click', () => setLayoutMode('viz'));
 
+    const STORAGE_KEY_STATE = 'code_d_buggy_persistent_state_v2';
+    const STORAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7-day cookie-style expiration
+
+    function readPersistentStore() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_STATE);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        const now = Date.now();
+        if (parsed.expiresAt && now > parsed.expiresAt) {
+          localStorage.removeItem(STORAGE_KEY_STATE);
+          return null;
+        }
+        if (parsed.codesByLang && typeof parsed.codesByLang === 'object') {
+          for (const k of Object.keys(parsed.codesByLang)) {
+            const entry = parsed.codesByLang[k];
+            if (!entry || (entry.expiresAt && now > entry.expiresAt)) {
+              delete parsed.codesByLang[k];
+            }
+          }
+        }
+        return parsed;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function saveEditorState() {
+      try {
+        const existing = readPersistentStore() || { codesByLang: {} };
+        const now = Date.now();
+        const expiresAt = now + STORAGE_TTL_MS;
+        existing.activeLang = currentLanguage;
+        existing.activePreset = presetSelect ? presetSelect.value : 'starter';
+        const stdinEl = document.getElementById('stdinTextarea');
+        existing.stdin = stdinEl ? stdinEl.value : '';
+        existing.expiresAt = expiresAt;
+        if (!existing.codesByLang) existing.codesByLang = {};
+        existing.codesByLang[currentLanguage] = {
+          code: codeTextarea.value,
+          preset: existing.activePreset,
+          expiresAt
+        };
+        localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(existing));
+      } catch (e) { }
+    }
+
     // Multi-Language Preset Loader
-    function loadPreset(presetKey, langOverride) {
+    function loadPreset(presetKey, langOverride, forceResetToTemplate = false) {
       const p = MULTI_LANG_PRESETS[presetKey];
       if (!p) return;
       const langSelectEl = document.getElementById('langSelect');
       const lang = langOverride || (langSelectEl ? langSelectEl.value : 'python');
       if (langSelectEl) langSelectEl.value = lang;
       currentLanguage = lang;
-      codeTextarea.value = p[lang] || p.python;
+
+      let restoredCode = null;
+      if (!forceResetToTemplate) {
+        const store = readPersistentStore();
+        const savedEntry = store && store.codesByLang ? store.codesByLang[lang] : null;
+        if (savedEntry && typeof savedEntry.code === 'string') {
+          restoredCode = savedEntry.code;
+        }
+      }
+
+      codeTextarea.value = restoredCode !== null ? restoredCode : (p[lang] || p.python);
       document.getElementById('stdinTextarea').value = p.stdin || '';
       watchExpressions = [...(p.watches || [])];
       breakpoints.clear();
       document.getElementById('bpCountBadge').textContent = '0';
+      saveEditorState();
       runVisualization();
     }
 
     presetSelect.addEventListener('change', () => {
-      loadPreset(presetSelect.value);
+      // Explicit example change loads that example's template for the current language
+      loadPreset(presetSelect.value, currentLanguage, true);
     });
     document.getElementById('langSelect').addEventListener('change', (e) => {
-      loadPreset(presetSelect.value, e.target.value);
+      // Save outgoing language code first, then switch and restore target language's persisted code if present
+      saveEditorState();
+      const targetLang = e.target.value;
+      const store = readPersistentStore();
+      const savedEntry = store && store.codesByLang ? store.codesByLang[targetLang] : null;
+      const targetPreset = (savedEntry && savedEntry.preset && MULTI_LANG_PRESETS[savedEntry.preset])
+        ? savedEntry.preset
+        : presetSelect.value;
+      presetSelect.value = targetPreset;
+      loadPreset(targetPreset, targetLang, false);
     });
-    btnVisualize.addEventListener('click', runVisualization);
+    btnVisualize.addEventListener('click', () => runVisualization(true));
 
     let currentThemeMode = 'dark'; // 'dark' | 'light' | 'auto'
     const systemDarkMatcher = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : { matches: true };
@@ -11143,9 +11325,38 @@ class Program {
       });
     }
 
+    codeTextarea.addEventListener('input', saveEditorState);
+    const stdinElForSave = document.getElementById('stdinTextarea');
+    if (stdinElForSave) stdinElForSave.addEventListener('input', saveEditorState);
+
+    window.addEventListener('beforeunload', saveEditorState);
+
     window.addEventListener('DOMContentLoaded', () => {
-      presetSelect.value = 'starter';
-      loadPreset('starter', 'python');
+      const store = readPersistentStore();
+      const validLangs = ['python', 'java', 'javascript', 'c', 'cpp', 'csharp'];
+      const savedLang = store && validLangs.includes(store.activeLang) ? store.activeLang : null;
+      const savedEntry = (savedLang && store.codesByLang) ? store.codesByLang[savedLang] : null;
+
+      if (savedLang && savedEntry && typeof savedEntry.code === 'string') {
+        const langSelectEl = document.getElementById('langSelect');
+        if (langSelectEl) langSelectEl.value = savedLang;
+        currentLanguage = savedLang;
+        const targetPreset = (savedEntry.preset && MULTI_LANG_PRESETS[savedEntry.preset])
+          ? savedEntry.preset
+          : ((store.activePreset && MULTI_LANG_PRESETS[store.activePreset]) ? store.activePreset : 'starter');
+        presetSelect.value = targetPreset;
+        watchExpressions = [...(MULTI_LANG_PRESETS[targetPreset].watches || [])];
+        codeTextarea.value = savedEntry.code;
+        if (typeof store.stdin === 'string') {
+          document.getElementById('stdinTextarea').value = store.stdin;
+        }
+        breakpoints.clear();
+        document.getElementById('bpCountBadge').textContent = '0';
+        runVisualization();
+      } else {
+        presetSelect.value = 'starter';
+        loadPreset('starter', 'python', true);
+      }
     });
   </script>
 </body>
